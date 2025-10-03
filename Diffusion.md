@@ -83,8 +83,8 @@ $$
 - Previous approaches:
     - **Autoencoders (AEs):** encode and reconstruct images via compression
     <img src="images\mona_lisa_AE.jpeg" style="width: 70%; display: block; margin-left: auto; margin-right: auto; padding: 20px"/>
-    
-    - **GANs (Generative Adversarial Networks):** generate sharp, realistic images using adversarial
+
+    - **GANs (Generative Adversarial Networks):** generate sharp, realistic images using an adversarial approach
     [(This Person Does Not Exist)](https://thispersondoesnotexist.com)
     <img src="images\GAN.png" style="width: 70%; display: block; margin-left: auto; margin-right: auto; padding: 20px"/>
 
