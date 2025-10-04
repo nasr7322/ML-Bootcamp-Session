@@ -148,9 +148,9 @@ $$
 - As noise is added, they “random walk” away from their structure turning into noisy images.
 
 <div style="display: flex; justify-content: space-around; align-items: center;">
-    <img src="images\toy dataset.png" style="width: 30%;"/>
-    <img src="images\random toy dataset 2.png" style="width: 30%;"/>
-    <img src="images\random toy dataset.png" style="width: 30%;"/>
+    <img src="images\toy dataset.png" style="width: 32%;"/>
+    <img src="images\random toy dataset 2.png" style="width: 32%;"/>
+    <img src="images\random toy dataset.png" style="width: 32%;"/>
 </div>
 
 - In general, diffusion models are **trained to reverse** this process.
@@ -159,19 +159,20 @@ $$
 
 #### Why Not Reverse Step by Step?
 
-- Instead of predicting the small amount of noise to go from `x_t` to `x_{t-1}`, the model is trained to predict the **total noise** (`ε`) that was added to the original image `x_0` to create `x_t`.
-- **Why this works:** The noisy image `x_t` is a direct combination of the original image `x_0` and the total noise `ε`. If the model can predict `ε` from `x_t`, it can also estimate the original `x_0`.
-- **Equivalence:** Knowing the start (`x_0`) and end (`x_t`) points allows you to calculate any intermediate step (like `x_{t-1}`). Therefore, predicting the total noise `ε` is mathematically equivalent to predicting the noise needed for a single step back.
+- Instead of predicting the small amount of noise to go from $x_t$ to $x_{t-1}$, the model is trained to predict the **total noise $ε$** that was added to the original image $x_0$ to create $x_t$
+- **Why this works:** The noisy image $x_t$ is a direct combination of the original image $x_0$ and the total noise $ε$. If the model can predict $ε$ from $x_t$, it can also estimate the original $x_0$.
+- **Equivalence:** Knowing the start $x_0$ and end $x_t$ points allows you to calculate any intermediate step (like $x_{t-1}$). Therefore, predicting the total noise $ε$ is mathematically equivalent to predicting the noise needed for a single step back.
 - **Benefits:** This approach simplifies the model's objective. It has one consistent goal for every timestep `t`: find the original noise `ε`. This makes training more stable and efficient.
-
 
 #### Score Function
 
 - We now have a score function producing  a feild that guides the points to move to the original locations.
 
 $$
-x_{0} = f(x_{100})
+x_{0} = \epsilon_\theta(x_{100})
 $$
+
+<img src="images\large t vector feild.png" style="width: 50%; display: block; margin-left: auto; margin-right: auto; padding: 20px"/>
 
 #### Introducing **t**: The Time Parameter
 
@@ -181,8 +182,13 @@ $$
     - The vector field changes and becomes more detailed as $t (1 \rightarrow 0)$, restoring the original image structure.
 
 $$
-x_{0} = f(x_{100}, t=1.0)
+x_{0} = \epsilon_\theta(x_{100}, t=1.0)
 $$
+
+<div style="display: flex; justify-content: space-around; align-items: center;">
+    <img src="images\large t vector feild.png" style="width: 45%;"/>
+    <img src="images\small t vector feild.png" style="width: 45%;"/>
+</div>
 
 #### Randomness in Diffusion
 
@@ -190,6 +196,8 @@ $$
     - **Without random noise:** Images look blurry; all points move to the center (mean).
     - **With random noise:** Model produces diverse, high-quality images.
 - The noise is gradually reduced as $ t \rightarrow 0 $ to allow for conversion.
+
+<img src="images\result of no ransomness.png" style="width: 50%; display: block; margin-left: auto; margin-right: auto; padding: 20px"/>
 
 ***
 
@@ -209,23 +217,48 @@ $$
 
 - $ \epsilon_\theta $ is the model's prediction of the noise
 - $ z \sim \mathcal{N}(0, I) $ for stochasticity
+- $ Stochasticity refers to the quality of being random, unpredictable, or influenced by chance.
 
 ***
 
 ### Improvement: DDIM
 
-- The **DDIM** paper offered deterministic sampling [(paper link)](https://arxiv.org/abs/2010.02502)
+- **DDIM** (Denoising Diffusion Implicit Models) provides a way to do faster, optionally deterministic sampling while keeping the same training objective as DDPM [(paper)](https://arxiv.org/abs/2010.02502).
 - **Key change:**
-    - No extra noise is added while sampling.
-    - Method derived from mechanical engineering concepts.
+    - Training stays identical: the model still learns $\epsilon_\theta(x_t t)$, the noise added to $x_0$ to produce $x_t$.
+    - Sampling changes: compute an estimate of $x_0$ from $x_t$, then construct $x_{t-1}$ directly from that estimate.
+    - You can remove sampling noise (deterministic sampling) or reintroduce a controlled amount via an η parameter.
 
-**DDIM Equation:**
+
+- **DDIM Equation:**
+
 
 $$
-x_{t-1} = \sqrt{\alpha_{t-1}} \left( \frac{x_t - \sqrt{1-\alpha_t} \epsilon_\theta(x_t, t)}{ \sqrt{\alpha_t} } \right) + \sqrt{1-\alpha_{t-1}} \epsilon_\theta(x_t, t)
+x_0 = \left( \frac{x_t - \sqrt{1-\alpha_t} \epsilon_\theta(x_t, t)}{ \sqrt{\alpha_t} } \right)
+$$
+.
+$$
+x_{t-1} = \sqrt{\alpha_{t-1}}\, x_0 \;+\; \sqrt{1 - \alpha_{t-1}}\, \epsilon_\theta(x_t, t)
 $$
 
-- Only sampling is changed; training remains the same.
+- **Controlled stochasticity:** introduce η ∈ [0,1] and set σ_t so that
+  $$
+  \sigma_t = \eta \sqrt{\frac{1-\alpha_{t-1}}{1-\alpha_t}\Big(1-\frac{\alpha_t}{\alpha_{t-1}}\Big)}.
+  $$
+  The general update becomes
+  $$
+  x_{t-1} = \sqrt{\alpha_{t-1}}\, x_0 \;+\; \sqrt{1 - \alpha_{t-1} - \sigma_t^2}\, \epsilon_\theta(x_t,t) \;+\; \sigma_t z,\quad z\sim\mathcal{N}(0,I).
+  $$
+  - η = 0 → deterministic DDIM (no added noise).
+  - η = 1 → recovers DDPM-like stochasticity.
+
+
+
+- **Practical benefits:**
+    - Much fewer sampling steps are possible: you can sample on a subset of timesteps with good quality.
+    - Deterministic sampling. yields reproducible outputs and often sharper results; adding noise to it introduces diversity.
+    - Works seamlessly with previously trained models as only the sampler changes.
+
 
 ***
 
@@ -239,10 +272,18 @@ $$
 f(x_{100}, t, \text{class})
 $$
 
-<img src="images\Dall-E-2-Architecture.jpg" style="width: 50%; display: block; margin-left: auto; margin-right: auto; padding: 20px"/>
+<img src="images\Dall-E-2-Architecture.jpg" style="width: 70%; display: block; margin-left: auto; margin-right: auto; padding: 20px"/>
 
+***
+
+<img src="images\diffusion meme.jpg" style="width: 30%; display: block; margin-left: auto; margin-right: auto; padding: 20px"/>
+
+***
+
+<img src="images\guidance.png" style="width: 50%; display: block; margin-left: auto; margin-right: auto; padding: 20px"/>
 
 - But this initially introduces conflict (good images vs desired class).
+- The need to generate a realistic image and the need to steer it into a specific class conflicted, leading to images not adhering to the desired classes very well.
 
 
 #### Classifier-Free Guidance
@@ -265,18 +306,38 @@ $$
 
 - Further improved guidance:
     - Subtract unwanted class flows to actively repel certain outcomes.
+
+$$
+\text{Guided Output} = f(\text{with class}) + \alpha [f(\text{with class}) - f(\text{negative class})]
+$$
+
 - Visual demo with and without negative prompts
 
-**Prompt:** A photorealistic, ultra-detailed portrait of a wise old wizard with a long white beard, holding a glowing crystal orb, set in a magical library filled with ancient books.
+[(Stable Diffusion Test)](https://huggingface.co/spaces/stabilityai/stable-diffusion)
 
-**Negative Prompt:** cartoon, drawing, painting, blurry, low quality, ugly, disfigured, bad anatomy, extra limbs, missing fingers, watermark, text, signature.
+**Prompt:** `Keanu Reeves portrait photo of a asia old warrior chief, tribal panther make up, blue on red, side profile, looking away, serious eyes, 50mm portrait photography, hard rim lighting photography`
+
+**Negative Prompt:** `disfigured, kitsch, ugly, oversaturated, grain, low-res, Deformed, blurry, bad anatomy, disfigured, poorly drawn face, mutation, mutated, extra limb, ugly, poorly drawn hands, missing limb, blurry, floating limbs, disconnected limbs, malformed hands, blur, out of focus, long neck, long body, ugly, disgusting, poorly drawn, childish, mutilated, mangled, old, surreal`
 
 ***
 
-### Other Modern Diffusion Models
+### Popular Image Generation Models Built on Diffusion Models
+
+| Model | Developer | Core Architecture |
+| :--- | :--- | :--- |
+| **[Stable Diffusion](https://stability.ai/stable-image)** | Stability AI | **Latent Diffusion Model (LDM)** |
+| **[Midjourney](https://www.midjourney.com/)** | Midjourney, Inc. (Independent Lab) | **Proprietary Diffusion Model** (U-Net based) |
+| **[DALL·E 3](https://openai.com/dall-e-3/)** | OpenAI | **Cascaded Diffusion Model** (with Prior) |
+| **[Imagen](https://deepmind.google/models/imagen/)** | Google DeepMind | **Cascaded Diffusion Model** (with T5 text encoder) |
+
+### Key Architectural Concepts (brief)
+
+1. **Latent Diffusion (Stable Diffusion):** run diffusion on compressed latents (VAE) to cut compute and memory.
+2. **Cascaded / Super‑resolution:** generate low‑res images then progressively upscale with specialized diffusion models.
+3. **Text conditioning:** quality of the text encoder (CLIP vs large LM like T5) strongly affects prompt fidelity.
+4. **Styling & guidance:** model finetuning and guidance (classifier‑free, negative prompts) control aesthetics and adherence to prompts.
 
 
-- to be added 
 ***
 
 ### Thank You!
