@@ -192,10 +192,15 @@ $$
 
 #### Randomness in Diffusion
 
-- Why inject more randomness in the reverse step?
-    - **Without random noise:** Images look blurry; all points move to the center (mean).
-    - **With random noise:** Model produces diverse, high-quality images.
-- The noise is gradually reduced as $ t \rightarrow 0 $ to allow for conversion.
+* **Why inject randomness in DDPM reverse steps?**
+
+  * In the **forward process**, we added *new Gaussian noise at every step*.
+  * Therefore, in the reverse, there isn’t one “correct” $x_{t-1}$. Instead, there’s a *distribution* of possible $x_{t-1}$’s.
+  * To properly cover this distribution, we must sample noise at each step.
+  * **Without noise:** every trajectory collapses to the mean → blurry, low-diversity images.
+  * **With noise:** we recover the full data distribution → sharp, diverse images.
+
+* The randomness is gradually reduced as $ t \rightarrow 0 $, so the process converges toward a clean sample.
 
 <img src="images\result of no ransomness.png" style="width: 50%; display: block; margin-left: auto; margin-right: auto; padding: 20px"/>
 
@@ -215,15 +220,19 @@ $$
 x_{t-1} = \frac{1}{\sqrt{\alpha_t}} \left( x_t - \frac{1- \alpha_t}{\sqrt{1-\bar{\alpha}_t}} \epsilon_\theta (x_t, t) \right) + \sigma_t z
 $$
 
-- $ \epsilon_\theta $ is the model's prediction of the noise
-- $ z \sim \mathcal{N}(0, I) $ for stochasticity
-- $ Stochasticity refers to the quality of being random, unpredictable, or influenced by chance.
+
+
+- **Main Concept:** At each step, it predicts the noise component to subtract and adds Gaussian noise to the sample.This is typically requires many steps (e.g., 1000) for high-fidelity results.
+- **Stochasticity** refers to the quality of being random, unpredictable, or influenced by chance.
+- We add noise in DDPM sampling steps because the reverse diffusion process is inherently probabilistic, each step is a distribution, not a point. Skipping the noise makes you sample only from the mean trajectory, which collapses diversity.
+    - Each backward step is seen as a distribution, not a single point.
+    - The random noise $z$ is essential: it ensures we are sampling from the full data distribution, not just collapsing to the mean.
 
 ***
 
 ### Improvement: DDIM
 
-- **DDIM** (Denoising Diffusion Implicit Models) provides a way to do faster, optionally deterministic sampling while keeping the same training objective as DDPM [(paper)](https://arxiv.org/abs/2010.02502).
+- **DDIM** (Denoising Diffusion Implicit Models) provides a way to do faster, optionally deterministic sampling while keeping the same training objective as DDPM [(paper)](https://arxiv.org/pdf/2010.02502).
 - **Key change:**
     - Training stays identical: the model still learns $\epsilon_\theta(x_t t)$, the noise added to $x_0$ to produce $x_t$.
     - Sampling changes: compute an estimate of $x_0$ from $x_t$, then construct $x_{t-1}$ directly from that estimate.
@@ -241,6 +250,10 @@ $$
 x_{t-1} = \sqrt{\alpha_{t-1}}\, x_0 \;+\; \sqrt{1 - \alpha_{t-1}}\, \epsilon_\theta(x_t, t)
 $$
 
+- Instead of sampling from the whole distribution, DDIM defines a deterministic mapping:
+    - Predict $x_0$ at each step.
+    - Move directly toward $x_0$ with a formula that guarantees consistency.
+
 - **Controlled stochasticity:** introduce η ∈ [0,1] and set σ_t so that
   $$
   \sigma_t = \eta \sqrt{\frac{1-\alpha_{t-1}}{1-\alpha_t}\Big(1-\frac{\alpha_t}{\alpha_{t-1}}\Big)}.
@@ -255,10 +268,8 @@ $$
 
 
 - **Practical benefits:**
-    - Much fewer sampling steps are possible: you can sample on a subset of timesteps with good quality.
+    - Much fewer sampling steps are possible: you can sample on a subset of timesteps (as few as 20-100 steps) with good quality. (fewer bigger steps)
     - Deterministic sampling. yields reproducible outputs and often sharper results; adding noise to it introduces diversity.
-    - Works seamlessly with previously trained models as only the sampler changes.
-
 
 ***
 
